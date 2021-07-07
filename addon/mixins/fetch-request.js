@@ -134,17 +134,18 @@ export default Mixin.create({
    */
   async request(url, options = {}) {
     let {response, requestOptions, builtURL} = await this.raw(url, options);
+    let responseClone = response.clone();
     let response2 = await parseJSON(response);
 
     if (!response2) {
       console.error({
         response,
+        responseClone,
         url,
         options,
         requestOptions,
         builtURL,
       });
-      debugger;
     }
 
     return this._handleResponse(response2, requestOptions, builtURL);
