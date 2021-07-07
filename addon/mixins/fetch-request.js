@@ -134,10 +134,11 @@ export default Mixin.create({
    */
   async request(url, options = {}) {
     let {response, requestOptions, builtURL} = await this.raw(url, options);
-    response = await parseJSON(response);
+    let response2 = await parseJSON(response);
 
-    if (!response) {
+    if (!response2) {
       console.error({
+        response,
         url,
         options,
         requestOptions,
@@ -145,7 +146,7 @@ export default Mixin.create({
       });
     }
 
-    return this._handleResponse(response, requestOptions, builtURL);
+    return this._handleResponse(response2, requestOptions, builtURL);
   },
 
   /**
