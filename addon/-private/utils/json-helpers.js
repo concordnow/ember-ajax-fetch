@@ -27,6 +27,7 @@ export async function parseJSON(response) {
   let error;
 
   if (!response.ok) {
+    console.error('!response.ok');
     const errorBody = await response.text();
     error = {
       message: errorBody,
@@ -37,24 +38,30 @@ export async function parseJSON(response) {
 
   return new Promise((resolve) => {
     if (responseType.includes('json')) {
+      console.error('responseType.includes(\'json\')');
       return response.json()
         .then((json) => {
           if (response.ok) {
+            console.error('responseType.includes(\'json\') - response.ok');
             return resolve({
               status: response.status,
               ok: response.ok,
               json
             });
           } else {
+            console.error('responseType.includes(\'json\') - else');
             error = Object.assign({}, json, error);
 
             return resolve(error);
           }
         })
         .catch((err) => {
+          console.error('responseType.includes(\'json\') - catch');
           if (isJsonString(error.message)) {
+            console.error('responseType.includes(\'json\') - catch - if');
             error.payload = JSON.parse(error.message);
           } else {
+            console.error('responseType.includes(\'json\') - catch - else');
             error.payload = error.message || err.toString();
           }
 
@@ -65,6 +72,7 @@ export async function parseJSON(response) {
     } else {
       return response.text()
         .then((text) => {
+          console.error('text - then');
           return resolve({
             status: response.status,
             ok: response.ok,
@@ -73,8 +81,10 @@ export async function parseJSON(response) {
         })
         .catch((err) => {
           if (isJsonString(error.message)) {
+            console.error('text - catch - isJsonString');
             error.payload = JSON.parse(error.message);
           } else {
+            console.error('text - catch - else');
             error.payload = error.message || err.toString();
           }
 
