@@ -36,62 +36,54 @@ export async function parseJSON(response) {
     };
   }
 
-  return new Promise((resolve) => {
-    if (responseType.includes('json')) {
-      console.error('responseType.includes(\'json\')');
-      return response.json()
-        .then((json) => {
-          if (response.ok) {
-            console.error('responseType.includes(\'json\') - response.ok');
-            return resolve({
-              status: response.status,
-              ok: response.ok,
-              json
-            });
-          } else {
-            console.error('responseType.includes(\'json\') - else');
-            error = Object.assign({}, json, error);
+  if (responseType.includes('json')) {
+    try {
+      let json = await response.json();
+      if (response.ok) {
+        console.error('responseType.includes(\'json\') - response.ok');
+        return {
+          status: response.status,
+          ok: response.ok,
+          json
+        };
+      } else {
+        console.error('responseType.includes(\'json\') - else');
+        error = Object.assign({}, json, error);
+        return error;
+      }
+    } catch (err) {
+      if (isJsonString(error.message)) {
+        console.error('responseType.includes(\'json\') - catch - if');
+        error.payload = JSON.parse(error.message);
+      } else {
+        console.error('responseType.includes(\'json\') - catch - else');
+        error.payload = error.message || err.toString();
+      }
 
-            return resolve(error);
-          }
-        })
-        .catch((err) => {
-          console.error('responseType.includes(\'json\') - catch');
-          if (isJsonString(error.message)) {
-            console.error('responseType.includes(\'json\') - catch - if');
-            error.payload = JSON.parse(error.message);
-          } else {
-            console.error('responseType.includes(\'json\') - catch - else');
-            error.payload = error.message || err.toString();
-          }
-
-          error.message = error.message || err.toString();
-
-          return resolve(error);
-        });
-    } else {
-      return response.text()
-        .then((text) => {
-          console.error('text - then');
-          return resolve({
-            status: response.status,
-            ok: response.ok,
-            text
-          });
-        })
-        .catch((err) => {
-          if (isJsonString(error.message)) {
-            console.error('text - catch - isJsonString');
-            error.payload = JSON.parse(error.message);
-          } else {
-            console.error('text - catch - else');
-            error.payload = error.message || err.toString();
-          }
-
-          error.message = error.message || err.toString();
-
-          return resolve(error);
-        });
+      error.message = error.message || err.toString();
+      return error;
     }
-  });
+  } else {
+    try {
+      let text = await response.text();
+
+      return {
+        status: response.status,
+        ok: response.ok,
+        text
+      };
+    } catch (err) {
+      if (isJsonString(error.message)) {
+        console.error('text - catch - isJsonString');
+        error.payload = JSON.parse(error.message);
+      } else {
+        console.error('text - catch - else');
+        error.payload = error.message || err.toString();
+      }
+
+      error.message = error.message || err.toString();
+
+      return error;
+    }
+  }
 }
