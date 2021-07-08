@@ -140,6 +140,7 @@ export default Mixin.create({
     if (!response2) {
       console.error({
         response,
+        response2,
         responseClone,
         url,
         options,
@@ -148,7 +149,9 @@ export default Mixin.create({
       });
     }
 
-    return this._handleResponse(response2, requestOptions, builtURL);
+    let response3 = await parseJSON(responseClone);
+
+    return this._handleResponse(response3, requestOptions, builtURL);
   },
 
   /**
