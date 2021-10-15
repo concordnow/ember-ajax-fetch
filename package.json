@@ -1,5 +1,5 @@
 {
-  "name": "ember-ajax-fetch",
+  "name": "@concordnow/ember-ajax-fetch",
   "version": "1.0.3",
   "description": "A drop-in ember-ajax replacement fetch service.",
   "keywords": [
