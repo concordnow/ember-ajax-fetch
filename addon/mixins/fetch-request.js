@@ -67,11 +67,11 @@ export default Mixin.create({
    * @return {object} containing {response, requestOptions, builtURL}
    */
   async raw(url, options = {}) {
-    console.log('🔍 [DEBUG] raw() method called with:', { url, options });
+    console.log('🔍 [DEBUG] raw() method called with:', JSON.stringify({ url, options }, null, 2));
     
     try {
       const hash = this.options(url, options);
-      console.log('🔍 [DEBUG] raw() options() returned:', hash);
+      console.log('🔍 [DEBUG] raw() options() returned:', JSON.stringify(hash, null, 2));
       
       const method = hash.method || hash.type || 'GET';
       const requestOptions = {
@@ -112,7 +112,7 @@ export default Mixin.create({
         }
       }
 
-      console.log('🔍 [DEBUG] raw() about to call fetch with:', { builtURL, requestOptions });
+      console.log('🔍 [DEBUG] raw() about to call fetch with:', JSON.stringify({ builtURL, requestOptions }, null, 2));
       
       // Used to manually pass another AbortController signal in, for external aborting
       if (options.signal) {
@@ -127,24 +127,24 @@ export default Mixin.create({
         clearTimeout(timeout);
       }
 
-      console.log('🔍 [DEBUG] raw() fetch completed successfully:', { 
+      console.log('🔍 [DEBUG] raw() fetch completed successfully:', JSON.stringify({ 
         status: response.status, 
         ok: response.ok, 
         headers: Object.fromEntries(response.headers.entries())
-      });
+      }, null, 2));
 
       const result = { response, requestOptions, builtURL };
-      console.log('🔍 [DEBUG] raw() returning:', result);
+      console.log('🔍 [DEBUG] raw() returning:', JSON.stringify(result, null, 2));
       return result;
     } catch (error) {
       // TODO: do we want to just throw here or should some errors be okay?
       console.log('🔍 [DEBUG] raw() caught error:', error);
-      console.log('🔍 [DEBUG] raw() error details:', {
+      console.log('🔍 [DEBUG] raw() error details:', JSON.stringify({
         name: error.name,
         message: error.message,
         stack: error.stack,
         cause: error.cause
-      });
+      }, null, 2));
       
       // Create an enhanced error with all the debugging context
       const enhancedError = new Error(
@@ -181,7 +181,7 @@ export default Mixin.create({
    */
   async request(url, options = {}) {
     try {
-      console.log('🔍 [DEBUG] request() calling this.raw() with:', { url, options });
+      console.log('🔍 [DEBUG] request() calling this.raw() with:', JSON.stringify({ url, options }, null, 2));
       
       // Safety check to ensure raw() method exists
       if (typeof this.raw !== 'function') {
@@ -196,7 +196,7 @@ export default Mixin.create({
       }
       
       const rawResult = await this.raw(url, options);
-      console.log('🔍 [DEBUG] request() this.raw() returned:', rawResult);
+      console.log('🔍 [DEBUG] request() this.raw() returned:', JSON.stringify(rawResult, null, 2));
       
       if (rawResult === undefined) {
         const error = new Error(
