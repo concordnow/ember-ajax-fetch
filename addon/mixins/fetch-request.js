@@ -67,47 +67,53 @@ export default Mixin.create({
    * @return {object} containing {response, requestOptions, builtURL}
    */
   async raw(url, options = {}) {
-    const hash = this.options(url, options);
-    const method = hash.method || hash.type || 'GET';
-    const requestOptions = {
-      method,
-      headers: {
-        ...(hash.headers || {}),
-      },
-    };
+    console.log('🔍 [DEBUG] raw() method called with:', { url, options });
+    
+    try {
+      const hash = this.options(url, options);
+      console.log('🔍 [DEBUG] raw() options() returned:', hash);
+      
+      const method = hash.method || hash.type || 'GET';
+      const requestOptions = {
+        method,
+        headers: {
+          ...(hash.headers || {}),
+        },
+      };
 
-    const abortController = new AbortController();
-    requestOptions.signal = abortController.signal;
+      const abortController = new AbortController();
+      requestOptions.signal = abortController.signal;
 
-    // If `contentType` is set to false, we want to not send anything and let the browser decide
-    // We also want to ensure that no content-type was manually set on options.headers before overwriting it
-    if (
-      options.contentType !== false &&
-      isEmpty(requestOptions.headers['Content-Type'])
-    ) {
-      requestOptions.headers['Content-Type'] = hash.contentType;
-    }
+      // If `contentType` is set to false, we want to not send anything and let the browser decide
+      // We also want to ensure that no content-type was manually set on options.headers before overwriting it
+      if (
+        options.contentType !== false &&
+        isEmpty(requestOptions.headers['Content-Type'])
+      ) {
+        requestOptions.headers['Content-Type'] = hash.contentType;
+      }
 
-    let builtURL = hash.url;
-    if (hash.data) {
-      let { data } = hash;
+      let builtURL = hash.url;
+      if (hash.data) {
+        let { data } = hash;
 
-      if (options.processData === false) {
-        requestOptions.body = data;
-      } else {
-        if (isJsonString(data)) {
-          data = JSON.parse(data);
-        }
-
-        if (requestOptions.method === 'GET') {
-          builtURL = `${builtURL}?${param(data)}`;
+        if (options.processData === false) {
+          requestOptions.body = data;
         } else {
-          requestOptions.body = JSON.stringify(data);
+          if (isJsonString(data)) {
+            data = JSON.parse(data);
+          }
+
+          if (requestOptions.method === 'GET') {
+            builtURL = `${builtURL}?${param(data)}`;
+          } else {
+            requestOptions.body = JSON.stringify(data);
+          }
         }
       }
-    }
 
-    try {
+      console.log('🔍 [DEBUG] raw() about to call fetch with:', { builtURL, requestOptions });
+      
       // Used to manually pass another AbortController signal in, for external aborting
       if (options.signal) {
         options.signal.addEventListener('abort', () => abortController.abort());
@@ -121,11 +127,47 @@ export default Mixin.create({
         clearTimeout(timeout);
       }
 
-      return { response, requestOptions, builtURL };
+      console.log('🔍 [DEBUG] raw() fetch completed successfully:', { 
+        status: response.status, 
+        ok: response.ok, 
+        headers: Object.fromEntries(response.headers.entries())
+      });
+
+      const result = { response, requestOptions, builtURL };
+      console.log('🔍 [DEBUG] raw() returning:', result);
+      return result;
     } catch (error) {
       // TODO: do we want to just throw here or should some errors be okay?
       console.log('🔍 [DEBUG] raw() caught error:', error);
-      throw error;
+      console.log('🔍 [DEBUG] raw() error details:', {
+        name: error.name,
+        message: error.message,
+        stack: error.stack,
+        cause: error.cause
+      });
+      
+      // Create an enhanced error with all the debugging context
+      const enhancedError = new Error(
+        `raw() method failed: ${error.message}\n` +
+        `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+        `Built URL: "${builtURL}"\n` +
+        `Request Options: ${JSON.stringify(requestOptions)}\n` +
+        `Original Error: ${error.name} - ${error.message}\n` +
+        `Stack: ${error.stack}`
+      );
+      
+      // Preserve the original error as the cause
+      enhancedError.cause = error;
+      enhancedError.originalError = error;
+      enhancedError.context = {
+        url,
+        options,
+        builtURL,
+        requestOptions,
+        method: requestOptions.method
+      };
+      
+      throw enhancedError;
     }
   },
 
@@ -139,13 +181,81 @@ export default Mixin.create({
    */
   async request(url, options = {}) {
     try {
-      let { response, requestOptions, builtURL } = await this.raw(url, options);
+      console.log('🔍 [DEBUG] request() calling this.raw() with:', { url, options });
+      
+      // Safety check to ensure raw() method exists
+      if (typeof this.raw !== 'function') {
+        const error = new Error(
+          `this.raw() is not a function - this indicates a serious implementation issue\n` +
+          `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+          `this.raw type: ${typeof this.raw}\n` +
+          `Available methods: ${Object.getOwnPropertyNames(this).filter(name => typeof this[name] === 'function').join(', ')}`
+        );
+        error.context = { url, options, rawMethod: this.raw };
+        throw error;
+      }
+      
+      const rawResult = await this.raw(url, options);
+      console.log('🔍 [DEBUG] request() this.raw() returned:', rawResult);
+      
+      if (rawResult === undefined) {
+        const error = new Error(
+          `this.raw() returned undefined - this should not happen\n` +
+          `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+          `This indicates a serious issue with the raw() method implementation`
+        );
+        error.context = { url, options, rawResult };
+        throw error;
+      }
+      
+      if (!rawResult || typeof rawResult !== 'object') {
+        const error = new Error(
+          `this.raw() returned unexpected value: ${typeof rawResult} - ${rawResult}\n` +
+          `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+          `Expected: object with {response, requestOptions, builtURL}\n` +
+          `Received: ${typeof rawResult} - ${JSON.stringify(rawResult)}`
+        );
+        error.context = { url, options, rawResult };
+        throw error;
+      }
+      
+      if (!rawResult.response || !rawResult.requestOptions || !rawResult.builtURL) {
+        const error = new Error(
+          `this.raw() returned incomplete object. Expected {response, requestOptions, builtURL}, got: ${Object.keys(rawResult)}\n` +
+          `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+          `Raw result: ${JSON.stringify(rawResult)}\n` +
+          `Missing properties: ${['response', 'requestOptions', 'builtURL'].filter(prop => !rawResult[prop]).join(', ')}`
+        );
+        error.context = { url, options, rawResult };
+        throw error;
+      }
+      
+      let { response, requestOptions, builtURL } = rawResult;
       response = await parseJSON(response);
 
       return this._handleResponse(response, requestOptions, builtURL);
     } catch (error) {
       console.log('🔍 [DEBUG] request() caught error:', error);
-      throw error;
+      console.log('🔍 [DEBUG] request() error stack:', error.stack);
+      
+      // If the error already has context (from our enhanced errors), just re-throw it
+      if (error.context) {
+        throw error;
+      }
+      
+      // Otherwise, enhance the error with context
+      const enhancedError = new Error(
+        `request() method failed: ${error.message}\n` +
+        `Context: url="${url}", options=${JSON.stringify(options)}\n` +
+        `Original Error: ${error.name} - ${error.message}\n` +
+        `Stack: ${error.stack}`
+      );
+      
+      enhancedError.cause = error;
+      enhancedError.originalError = error;
+      enhancedError.context = { url, options };
+      
+      throw enhancedError;
     }
   },
 
