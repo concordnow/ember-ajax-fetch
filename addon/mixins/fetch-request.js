@@ -123,6 +123,7 @@ export default Mixin.create({
 
       return { response, requestOptions, builtURL };
     } catch (error) {
+      console.debug('🔍 [DEBUG] raw() caught error:', error);
       // TODO: do we want to just throw here or should some errors be okay?
       throw error;
     }
@@ -137,10 +138,14 @@ export default Mixin.create({
    * @return {Promise<*>}
    */
   async request(url, options = {}) {
-    let { response, requestOptions, builtURL } = await this.raw(url, options);
-    response = await parseJSON(response);
+    try {
+      let { response, requestOptions, builtURL } = await this.raw(url, options);
+      response = await parseJSON(response);
 
-    return this._handleResponse(response, requestOptions, builtURL);
+      return this._handleResponse(response, requestOptions, builtURL);
+    } catch (error) {
+      console.debug('🔍 [DEBUG] request() caught error:', error);
+    }
   },
 
   /**
