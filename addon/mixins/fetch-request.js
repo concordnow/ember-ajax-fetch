@@ -123,6 +123,7 @@ export default Mixin.create({
 
       return { response, requestOptions, builtURL };
     } catch (error) {
+      console.debug('[DEBUG] catch in ember-ajax-fetch request method : ', error);
       // TODO: do we want to just throw here or should some errors be okay?
       throw error;
     }
