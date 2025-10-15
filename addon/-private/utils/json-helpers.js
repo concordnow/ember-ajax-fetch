@@ -16,6 +16,12 @@ export function isJsonString(str) {
   }
 }
 
+function isNativeFetch() {
+  return (
+    typeof fetch === 'function' && fetch.toString().includes('[native code]')
+  );
+}
+
 /**
  * Parses the JSON returned by a network request
  *
@@ -27,6 +33,8 @@ export function isJsonString(str) {
 export async function parseJSON(response) {
   // Generate unique ID for this request trace
   const traceId = `parseJSON_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+
+  console.log(`[DEBUG] ${traceId}: isNativeFetch =`, isNativeFetch());
 
   console.log(`[DEBUG] ${traceId}: Starting response parsing`);
 
