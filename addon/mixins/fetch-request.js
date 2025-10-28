@@ -42,6 +42,12 @@ import {
   isJsonString,
   parseJSON,
 } from 'ember-ajax-fetch/-private/utils/json-helpers';
+import {
+  fetchWithMonitoring,
+  reportHttpErrorToSentry,
+  analyzeRequest,
+  getNetworkInfo,
+} from 'ember-ajax-fetch/-private/utils/fetch-monitor';
 
 /**
  * @class FetchRequestMixin
@@ -116,7 +122,15 @@ export default Mixin.create({
       if (options.timeout) {
         timeout = setTimeout(() => abortController.abort(), options.timeout);
       }
-      let response = await fetch(builtURL, requestOptions);
+      // Use monitored fetch if enabled
+      const monitorConfig = this._getFetchMonitorConfig();
+      let response;
+      
+      if (monitorConfig && monitorConfig.enabled) {
+        response = await fetchWithMonitoring(builtURL, requestOptions, monitorConfig);
+      } else {
+        response = await fetch(builtURL, requestOptions);
+      }
       if (timeout) {
         clearTimeout(timeout);
       }
@@ -138,9 +152,10 @@ export default Mixin.create({
    */
   async request(url, options = {}) {
     let { response, requestOptions, builtURL } = await this.raw(url, options);
+    const rawResponse = response; // Keep reference to raw response for headers
     response = await parseJSON(response);
 
-    return this._handleResponse(response, requestOptions, builtURL);
+    return this._handleResponse(response, requestOptions, builtURL, rawResponse);
   },
 
   /**
@@ -431,20 +446,95 @@ export default Mixin.create({
    * @param {object} response The response from the request
    * @param {object} requestOptions The options object containing headers, method, etc
    * @param {string} url The url for the request
+   * @param {object} rawResponse The raw fetch Response object (optional, for analysis)
    * @return {*}
    * @private
    */
-  _handleResponse(response, requestOptions, url) {
+  _handleResponse(response, requestOptions, url, rawResponse = null) {
     if (response.ok) {
       return response.text || response.json || response.blob;
     } else {
-      throw this._createCorrectError(
+      const error = this._createCorrectError(
         response,
         response.payload,
         requestOptions,
         url,
       );
+
+      // Report HTTP errors to Sentry if monitoring is enabled
+      const monitorConfig = this._getFetchMonitorConfig();
+      if (monitorConfig && monitorConfig.enabled) {
+        // Analyze response for warnings to provide context
+        // Use rawResponse if available (has headers), otherwise fall back to parsed response
+        const responseForAnalysis = rawResponse || response;
+        const analysis = this._analyzeResponseForWarnings(responseForAnalysis, monitorConfig);
+        reportHttpErrorToSentry(error, response, requestOptions, url, analysis);
+      }
+
+      throw error;
     }
+  },
+
+  /**
+   * Analyze response for warning signs (for HTTP error context)
+   * @method _analyzeResponseForWarnings
+   * @param {object} response The response object
+   * @param {object} config Monitor configuration
+   * @return {object} Analysis result
+   * @private
+   */
+  _analyzeResponseForWarnings(response, config) {
+    // Build minimal metrics object from response
+    const metrics = {
+      url: response.url,
+      method: 'unknown', // Not available here
+      status: response.status,
+      statusText: response.statusText,
+      contentLength: response.headers?.get?.('content-length') || null,
+      contentType: response.headers?.get?.('content-type') || null,
+      actualBodySize: response.headers?.get?.('content-length')
+        ? parseInt(response.headers.get('content-length'), 10)
+        : null,
+      errorOccurred: true,
+      errorPhase: 'http_error',
+      errorMessage: `HTTP ${response.status}`,
+      errorType: 'HttpError',
+      possibleCause: null,
+    };
+
+    // Build minimal timings object (we don't have actual timings here)
+    const timings = {
+      requestStart: 0,
+      requestStartTimestamp: Date.now(),
+      headerReceived: null,
+      requestEnd: 0, // Unknown at this point
+    };
+
+    // Get network info
+    const networkInfo = getNetworkInfo();
+
+    // Analyze for warnings
+    return analyzeRequest(metrics, timings, networkInfo, config);
+  },
+
+  /**
+   * Get fetch monitoring configuration
+   * @method _getFetchMonitorConfig
+   * @return {Object|null} Monitoring configuration or null if disabled
+   * @private
+   */
+  _getFetchMonitorConfig() {
+    const enableFetchMonitoring = get(this, 'enableFetchMonitoring');
+    const fetchMonitorConfig = get(this, 'fetchMonitorConfig');
+
+    if (!enableFetchMonitoring) {
+      return null;
+    }
+
+    return {
+      enabled: true,
+      ...fetchMonitorConfig,
+    };
   },
 
   /**

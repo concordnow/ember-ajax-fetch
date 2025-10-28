@@ -27,6 +27,7 @@ export function isJsonString(str) {
 export async function parseJSON(response) {
   const responseType =
     response.headers.get('content-type') || 'Empty Content-Type';
+
   let error = {
     status: response.status,
     statusText: response.statusText,
@@ -50,7 +51,6 @@ export async function parseJSON(response) {
             });
           } else {
             error = Object.assign({}, json, error);
-
             return resolve(error);
           }
         })
