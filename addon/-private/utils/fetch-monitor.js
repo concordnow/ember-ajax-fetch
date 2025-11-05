@@ -50,7 +50,7 @@ function getSentry() {
  * @returns {number} Total time in milliseconds
  */
 function calculateTotalTime(timings) {
-  return timings.requestEnd 
+  return timings.requestEnd
     ? timings.requestEnd - timings.requestStart
     : performance.now() - timings.requestStart;
 }
@@ -61,7 +61,7 @@ function calculateTotalTime(timings) {
  * @returns {number|null} Time to headers in milliseconds, or null if not available
  */
 function calculateTimeToHeaders(timings) {
-  return timings.headerReceived 
+  return timings.headerReceived
     ? timings.headerReceived - timings.requestStart
     : null;
 }
@@ -92,9 +92,9 @@ const CONFIG_VALIDATION = {
   largeResponseThreshold: { default: 5 * 1024 * 1024, validate: v => v > 0 },
   slowRequestThreshold: { default: 10000, validate: v => v > 0 },
   minDurationToLog: { default: 100, validate: v => v >= 0 },
-  infrastructureTimeoutThresholds: { 
-    default: [30000, 60000, 90000, 120000], 
-    validate: v => Array.isArray(v) && v.length > 0 
+  infrastructureTimeoutThresholds: {
+    default: [30000, 60000, 90000, 120000],
+    validate: v => Array.isArray(v) && v.length > 0
   },
   reportWarningsOnlyIfSlowerThan: { default: 20000, validate: v => v > 0 },
   immediateFailureThreshold: { default: 100, validate: v => v >= 0 },
@@ -138,6 +138,7 @@ function getNetworkInfo() {
       rtt: connection.rtt ?? null, // Round-trip time in ms
       saveData: connection.saveData ?? false, // Data saver enabled
       type: connection.type || 'unknown', // 'wifi', 'cellular', etc.
+      online: navigator.onLine ?? false, // Whether the network is online
     };
   } catch (error) {
     // Silently fail if network API throws an error
