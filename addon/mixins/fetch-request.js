@@ -125,9 +125,13 @@ export default Mixin.create({
       // Use monitored fetch if enabled
       const monitorConfig = this._getFetchMonitorConfig();
       let response;
-      
+
       if (monitorConfig && monitorConfig.enabled) {
-        response = await fetchWithMonitoring(builtURL, requestOptions, monitorConfig);
+        response = await fetchWithMonitoring(
+          builtURL,
+          requestOptions,
+          monitorConfig,
+        );
       } else {
         response = await fetch(builtURL, requestOptions);
       }
@@ -153,9 +157,60 @@ export default Mixin.create({
   async request(url, options = {}) {
     let { response, requestOptions, builtURL } = await this.raw(url, options);
     const rawResponse = response; // Keep reference to raw response for headers
+
+    // Log detailed information between headers received and body processing
+    const monitorConfig = this._getFetchMonitorConfig();
+    const urlToMonitor = ['tags', 'members', 'summary', 'AGREEMENT-PANEL'];
+
+    if (
+      monitorConfig &&
+      monitorConfig.enabled &&
+      urlToMonitor.some((url) => builtURL.includes(url))
+    ) {
+      const networkInfo = getNetworkInfo();
+      const contentLength = response.headers.get('content-length');
+      const contentType = response.headers.get('content-type');
+
+      console.info(
+        '[Fetch Monitor] Headers received, preparing to process body',
+        {
+          url: builtURL,
+          method: requestOptions.method,
+          status: response.status,
+          statusText: response.statusText,
+          contentLength: contentLength,
+          contentType: contentType,
+          contentLengthFormatted: contentLength
+            ? this._formatBytes(parseInt(contentLength, 10))
+            : 'unknown',
+          responseType: response.type, // 'basic', 'cors', 'error', 'opaque', etc.
+          redirected: response.redirected,
+          headers: this._extractRelevantHeaders(response.headers),
+          networkInfo: networkInfo
+            ? {
+                effectiveType: networkInfo.effectiveType,
+                downlink: networkInfo.downlink
+                  ? `${networkInfo.downlink} Mbps`
+                  : null,
+                rtt: networkInfo.rtt ? `${networkInfo.rtt}ms` : null,
+                saveData: networkInfo.saveData,
+                type: networkInfo.type,
+                online: networkInfo.online,
+              }
+            : 'unavailable',
+          timestamp: new Date().toISOString(),
+        },
+      );
+    }
+
     response = await parseJSON(response);
 
-    return this._handleResponse(response, requestOptions, builtURL, rawResponse);
+    return this._handleResponse(
+      response,
+      requestOptions,
+      builtURL,
+      rawResponse,
+    );
   },
 
   /**
@@ -467,7 +522,10 @@ export default Mixin.create({
         // Analyze response for warnings to provide context
         // Use rawResponse if available (has headers), otherwise fall back to parsed response
         const responseForAnalysis = rawResponse || response;
-        const analysis = this._analyzeResponseForWarnings(responseForAnalysis, monitorConfig);
+        const analysis = this._analyzeResponseForWarnings(
+          responseForAnalysis,
+          monitorConfig,
+        );
         reportHttpErrorToSentry(error, response, requestOptions, url, analysis);
       }
 
@@ -535,6 +593,55 @@ export default Mixin.create({
       enabled: true,
       ...fetchMonitorConfig,
     };
+  },
+
+  /**
+   * Format bytes to human readable string
+   * @method _formatBytes
+   * @param {number} bytes - Number of bytes
+   * @return {string} Formatted string
+   * @private
+   */
+  _formatBytes(bytes) {
+    if (bytes === 0) return '0 Bytes';
+    if (!bytes) return 'unknown';
+
+    const k = 1024;
+    const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+    const i = Math.floor(Math.log(bytes) / Math.log(k));
+
+    return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+  },
+
+  /**
+   * Extract relevant headers from response
+   * @method _extractRelevantHeaders
+   * @param {Headers} headers - Response headers object
+   * @return {Object} Relevant headers as key-value pairs
+   * @private
+   */
+  _extractRelevantHeaders(headers) {
+    const relevantHeaders = [
+      'content-encoding',
+      'content-type',
+      'content-length',
+      'cache-control',
+      'etag',
+      'last-modified',
+      'transfer-encoding',
+      'x-request-id',
+      'x-response-time',
+    ];
+
+    const extracted = {};
+    relevantHeaders.forEach((headerName) => {
+      const value = headers.get(headerName);
+      if (value !== null) {
+        extracted[headerName] = value;
+      }
+    });
+
+    return extracted;
   },
 
   /**
